@@ -1,18 +1,10 @@
 import os
 import re
-import time
 
 import requests
+import streamlit as st
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    )
-}
-
-IMAGE_EXT_RE = re.compile(r"\.(jpg|jpeg|png|gif|webp)(?:$|\?)", re.IGNORECASE)
-SKIP_DOMAINS = ("bing.com", "microsoft.com", "gstatic.com", "google.com")
+PEXELS_SEARCH_URL = "https://api.pexels.com/v1/search"
 
 
 def sanitize_folder_name(topic: str) -> str:
@@ -20,64 +12,39 @@ def sanitize_folder_name(topic: str) -> str:
     return name.strip("_") or "topic"
 
 
-def fetch_image_urls(query: str, limit: int) -> list:
-    """Scrape live image URLs from a Bing Images search results page."""
+def fetch_image_results(query: str, limit: int) -> list:
+    """Search Pexels for query, returning up to `limit` results.
+
+    Each result is a dict with download_url (the actual image), source_page (the
+    Pexels photo page, for attribution), and photographer name.
+    """
     resp = requests.get(
-        "https://www.bing.com/images/search",
-        params={"q": query, "form": "HDRSC2"},
-        headers=HEADERS,
+        PEXELS_SEARCH_URL,
+        params={"query": query, "per_page": min(limit, 80)},
+        headers={"Authorization": st.secrets["PEXELS_API_KEY"]},
         timeout=10,
     )
     resp.raise_for_status()
-    html = resp.text
-
-    # Only trust Bing's own per-result "murl" (original image URL) field. A generic
-    # "any image URL on the page" fallback would silently return unrelated images
-    # (ads, logos, trending-search thumbnails) whenever Bing serves a degraded or
-    # bot-challenge response instead of real results for the query — which is common
-    # from shared/automated IP ranges like a cloud host's, even if it never happens
-    # from a home connection.
-    urls = re.findall(r"murl&quot;:&quot;(https?://[^&]+)&quot;", html)
-
-    seen = set()
-    unique_urls = []
-    for url in urls:
-        if url in seen or any(domain in url for domain in SKIP_DOMAINS):
-            continue
-        seen.add(url)
-        unique_urls.append(url)
-        if len(unique_urls) >= limit * 3:
-            break
-    return unique_urls
+    data = resp.json()
+    return [
+        {
+            "download_url": photo["src"]["large"],
+            "source_page": photo["url"],
+            "photographer": photo.get("photographer", ""),
+        }
+        for photo in data.get("photos", [])
+    ]
 
 
-def guess_extension(url: str, content_type: str) -> str:
-    match = IMAGE_EXT_RE.search(url)
-    if match:
-        ext = match.group(1).lower()
-        return "jpg" if ext == "jpeg" else ext
-    if "png" in content_type:
-        return "png"
-    if "gif" in content_type:
-        return "gif"
-    if "webp" in content_type:
-        return "webp"
-    return "jpg"
-
-
-def download_image(url: str, folder: str, index: int) -> bool:
-    """Download one image and write a matching .txt file with its source URL."""
+def download_image(result: dict, folder: str, index: int) -> bool:
+    """Download one image and write a matching .txt file with its Pexels source page."""
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=8)
+        resp = requests.get(result["download_url"], timeout=8)
         resp.raise_for_status()
-        content_type = resp.headers.get("Content-Type", "")
-        if "image" not in content_type and not IMAGE_EXT_RE.search(url):
-            return False
-        ext = guess_extension(url, content_type)
-        with open(os.path.join(folder, f"{index}.{ext}"), "wb") as f:
+        with open(os.path.join(folder, f"{index}.jpg"), "wb") as f:
             f.write(resp.content)
         with open(os.path.join(folder, f"{index}.txt"), "w", encoding="utf-8") as f:
-            f.write(url)
+            f.write(result["source_page"])
         return True
     except requests.RequestException:
         return False
@@ -99,18 +66,17 @@ def scrape_topic(query: str, num_images: int, base_dir: str, progress_callback=N
     folder = os.path.join(base_dir, sanitize_folder_name(query))
     os.makedirs(folder, exist_ok=True)
 
-    candidates = fetch_image_urls(query, num_images)
+    candidates = fetch_image_results(query, num_images)
     total_candidates = max(len(candidates), 1)
     start_index = next_start_index(folder)
 
     saved = 0
-    for attempted, url in enumerate(candidates, start=1):
+    for attempted, result in enumerate(candidates, start=1):
         if saved >= num_images:
             break
-        if download_image(url, folder, start_index + saved):
+        if download_image(result, folder, start_index + saved):
             saved += 1
         if progress_callback:
             progress_callback(attempted, total_candidates, saved, num_images)
-        time.sleep(0.15)
 
     return folder, saved

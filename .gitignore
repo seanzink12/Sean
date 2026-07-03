@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 scraped_images/
 .claude/scheduled_tasks.lock
+.streamlit/secrets.toml

@@ -1,5 +1,6 @@
 import os
 
+import requests
 import streamlit as st
 
 from scraper import scrape_topic
@@ -95,14 +96,20 @@ st.markdown(
 
 st.markdown('<div class="hero-title">Interior Design Image Scraper</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="hero-sub">Live-search Bing Images for a topic and build a saved, source-linked gallery.</div>',
+    '<div class="hero-sub">Search Pexels for a topic and build a saved, source-linked gallery.</div>',
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<div class="fine-print">Unofficial scraper — results depend on Bing\'s current page markup and may be '
-    "rate-limited on heavy use.</div>",
+    '<div class="fine-print">Photos provided by Pexels.</div>',
     unsafe_allow_html=True,
 )
+
+if "PEXELS_API_KEY" not in st.secrets:
+    st.warning(
+        "No Pexels API key configured. Get a free key at "
+        "[pexels.com/api](https://www.pexels.com/api/), then add it as `PEXELS_API_KEY` "
+        "in `.streamlit/secrets.toml` (local) or your app's Settings → Secrets (Streamlit Cloud)."
+    )
 
 with st.form("scrape_form"):
     col1, col2 = st.columns([3, 1])
@@ -115,6 +122,8 @@ with st.form("scrape_form"):
 if submitted:
     if not topic.strip():
         st.warning("Enter a search topic first.")
+    elif "PEXELS_API_KEY" not in st.secrets:
+        st.error("Add a Pexels API key first (see the notice above).")
     else:
         progress_bar = st.progress(0.0)
         status_text = st.empty()
@@ -123,14 +132,21 @@ if submitted:
             progress_bar.progress(attempted / total_candidates)
             status_text.markdown(f"Saved **{saved}/{target}** images — checked {attempted}/{total_candidates} candidates")
 
-        with st.spinner(f"Scraping images for “{topic}”..."):
-            folder, saved = scrape_topic(topic, int(num_images), BASE_DIR, progress_callback=on_progress)
-
-        progress_bar.progress(1.0)
-        if saved == 0:
-            st.error("No images could be downloaded. Bing may be rate-limiting requests — try again shortly.")
+        try:
+            with st.spinner(f"Searching Pexels for “{topic}”..."):
+                folder, saved = scrape_topic(topic, int(num_images), BASE_DIR, progress_callback=on_progress)
+        except requests.HTTPError as e:
+            saved = 0
+            if e.response is not None and e.response.status_code == 401:
+                st.error("Pexels rejected the API key. Double-check it was copied correctly.")
+            else:
+                st.error(f"Pexels request failed: {e}")
         else:
-            st.success(f"Saved {saved} image(s) to {folder}")
+            progress_bar.progress(1.0)
+            if saved == 0:
+                st.error("No images found for that topic. Try a different search term.")
+            else:
+                st.success(f"Saved {saved} image(s) to {folder}")
 
 st.markdown("---")
 st.markdown('<div class="gallery-title">Gallery</div>', unsafe_allow_html=True)
