@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.venv/
+scraped_images/
+.claude/scheduled_tasks.lock

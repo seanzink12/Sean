@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tic Tac Toe CHAOS</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+      font-family: 'Segoe UI', sans-serif;
+      color: #eee;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      margin-bottom: 0.3rem;
+      letter-spacing: 4px;
+      color: #e94560;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 1rem;
+      letter-spacing: 2px;
+    }
+
+    #status {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      min-height: 1.4rem;
+      color: #a8dadc;
+      text-align: center;
+    }
+
+    /* ── POWER-UP PANELS ── */
+    #power-panels {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+      align-items: flex-start;
+    }
+
+    .power-panel {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 0.5rem 0.8rem;
+      min-width: 110px;
+      text-align: center;
+      border: 2px solid transparent;
+      transition: border 0.2s;
+    }
+
+    .power-panel.x-panel { border-color: #e94560; }
+    .power-panel.o-panel { border-color: #a8dadc; }
+
+    .power-panel h3 {
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      margin-bottom: 0.4rem;
+      opacity: 0.7;
+    }
+
+    .power-panel.x-panel h3 { color: #e94560; }
+    .power-panel.o-panel h3 { color: #a8dadc; }
+
+    .pwr-btn {
+      display: block;
+      width: 100%;
+      margin: 3px 0;
+      padding: 4px 6px;
+      font-size: 0.78rem;
+      border-radius: 6px;
+      border: 1px solid #333;
+      background: #0f3460;
+      color: #eee;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .pwr-btn:hover:not(:disabled) { background: #1a4a8a; }
+    .pwr-btn:disabled { opacity: 0.3; cursor: default; text-decoration: line-through; }
+    .pwr-btn.active-power { background: #e94560 !important; color: #fff; }
+
+    /* ── BOARD ── */
+    #board {
+      display: grid;
+      grid-template-columns: repeat(4, 85px);
+      grid-template-rows: repeat(4, 85px);
+      gap: 8px;
+    }
+
+    .cell {
+      background: #16213e;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      user-select: none;
+      position: relative;
+    }
+
+    .cell:hover:not(.blocked) { background: #0f3460; transform: scale(1.05); }
+    .cell.x { color: #e94560; }
+    .cell.o { color: #a8dadc; }
+    .cell.win { background: #0f3460; animation: pulse 0.5s ease; }
+    .cell.frozen { background: #112244; }
+    .cell.frozen::after {
+      content: '❄️';
+      position: absolute;
+      font-size: 1rem;
+      top: 4px; right: 6px;
+    }
+    .cell.shielded::after {
+      content: '🛡️';
+      position: absolute;
+      font-size: 0.9rem;
+      top: 4px; right: 6px;
+    }
+    .cell.bomb-target { background: #3a0a0a !important; }
+
+    @keyframes pulse {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+
+    /* ── SCOREBOARD ── */
+    #scoreboard {
+      display: flex;
+      gap: 2rem;
+      margin: 1rem 0;
+      font-size: 1rem;
+    }
+
+    .score-box {
+      text-align: center;
+      background: #16213e;
+      padding: 0.5rem 1.2rem;
+      border-radius: 10px;
+    }
+
+    .score-box span { display: block; font-size: 1.5rem; font-weight: bold; }
+    .score-box.x-score span { color: #e94560; }
+    .score-box.o-score span { color: #a8dadc; }
+    .score-box.draw-score span { color: #aaa; }
+
+    #restart {
+      margin-top: 0.8rem;
+      padding: 0.55rem 2rem;
+      font-size: 1rem;
+      background: #e94560;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: background 0.15s;
+    }
+    #restart:hover { background: #c73652; }
+
+    #mode-toggle {
+      margin-bottom: 0.8rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .mode-btn {
+      padding: 0.4rem 1.2rem;
+      border: 2px solid #e94560;
+      background: transparent;
+      color: #eee;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .mode-btn.active { background: #e94560; }
+
+    #hint {
+      font-size: 0.75rem;
+      color: #555;
+      margin-top: 0.5rem;
+      text-align: center;
+      max-width: 380px;
+    }
+
+    /* countdown timer ring */
+    #timer-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    #timer {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #a8dadc;
+      min-width: 2ch;
+      text-align: center;
+      transition: color 0.3s;
+    }
+    #timer.urgent { color: #e94560; animation: blink 0.5s infinite alternate; }
+    @keyframes blink { to { opacity: 0.3; } }
+  </style>
+</head>
+<body>
+
+  <h1>TIC TAC TOE</h1>
+  <div class="subtitle">CHAOS EDITION</div>
+
+  <div id="mode-toggle">
+    <button class="mode-btn active" id="btn-pvp">2 Players</button>
+    <button class="mode-btn" id="btn-ai">vs CPU</button>
+  </div>
+
+  <!-- Power-up panels -->
+  <div id="power-panels">
+    <div class="power-panel x-panel" id="panel-x">
+      <h3>X POWERS</h3>
+      <button class="pwr-btn" id="x-bomb"   data-player="X" data-power="bomb">💣 Bomb (destroy)</button>
+      <button class="pwr-btn" id="x-steal"  data-player="X" data-power="steal">🔄 Steal (convert)</button>
+      <button class="pwr-btn" id="x-freeze" data-player="X" data-power="freeze">❄️ Freeze (skip turn)</button>
+      <button class="pwr-btn" id="x-shield" data-player="X" data-power="shield">🛡️ Shield (protect)</button>
+    </div>
+
+    <div id="timer-wrap">
+      <div id="timer">10</div>
+      <div style="font-size:0.7rem;color:#555">sec</div>
+    </div>
+
+    <div class="power-panel o-panel" id="panel-o">
+      <h3>O POWERS</h3>
+      <button class="pwr-btn" id="o-bomb"   data-player="O" data-power="bomb">💣 Bomb (destroy)</button>
+      <button class="pwr-btn" id="o-steal"  data-player="O" data-power="steal">🔄 Steal (convert)</button>
+      <button class="pwr-btn" id="o-freeze" data-player="O" data-power="freeze">❄️ Freeze (skip turn)</button>
+      <button class="pwr-btn" id="o-shield" data-player="O" data-power="shield">🛡️ Shield (protect)</button>
+    </div>
+  </div>
+
+  <div id="status">X's turn</div>
+
+  <div id="board">
+    <div class="cell" data-i="0"></div>
+    <div class="cell" data-i="1"></div>
+    <div class="cell" data-i="2"></div>
+    <div class="cell" data-i="3"></div>
+    <div class="cell" data-i="4"></div>
+    <div class="cell" data-i="5"></div>
+    <div class="cell" data-i="6"></div>
+    <div class="cell" data-i="7"></div>
+    <div class="cell" data-i="8"></div>
+    <div class="cell" data-i="9"></div>
+    <div class="cell" data-i="10"></div>
+    <div class="cell" data-i="11"></div>
+    <div class="cell" data-i="12"></div>
+    <div class="cell" data-i="13"></div>
+    <div class="cell" data-i="14"></div>
+    <div class="cell" data-i="15"></div>
+  </div>
+
+  <div id="scoreboard">
+    <div class="score-box x-score">X <span id="score-x">0</span></div>
+    <div class="score-box draw-score">Draw <span id="score-d">0</span></div>
+    <div class="score-box o-score">O <span id="score-o">0</span></div>
+  </div>
+
+  <button id="restart">New Game</button>
+
+  <div id="hint">
+    💣 Bomb — destroy any opponent piece &nbsp;|&nbsp;
+    🔄 Steal — convert opponent piece to yours &nbsp;|&nbsp;
+    ❄️ Freeze — skip opponent's next turn &nbsp;|&nbsp;
+    🛡️ Shield — protect one of your pieces (immune to bomb/steal)
+  </div>
+
+  <script>
+    const WINS = [
+      [0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],
+      [0,4,8,12],[1,5,9,13],[2,6,10,14],[3,7,11,15],
+      [0,5,10,15],[3,6,9,12]
+    ];
+
+    let board, current, gameOver, vsAI;
+    let frozen = {};      // frozen[player] = true → skip their turn
+    let shielded = {};    // shielded[cellIndex] = true
+    let powers = {};      // powers[player][power] = available bool
+    let activePower = null; // { player, power }
+    let timerInterval, timeLeft;
+    let scores = { X: 0, O: 0, D: 0 };
+
+    const cells = document.querySelectorAll('.cell');
+    const statusEl = document.getElementById('status');
+    const timerEl  = document.getElementById('timer');
+
+    function defaultPowers() {
+      return { bomb: true, steal: true, freeze: true, shield: true };
+    }
+
+    function init() {
+      board    = Array(16).fill('');
+      current  = 'X';
+      gameOver = false;
+      frozen   = { X: false, O: false };
+      shielded = {};
+      powers   = { X: defaultPowers(), O: defaultPowers() };
+      activePower = null;
+      cells.forEach(c => { c.textContent = ''; c.className = 'cell'; });
+      refreshPowerBtns();
+      statusEl.textContent = "X's turn";
+      resetTimer();
+    }
+
+    // ── TIMER ──────────────────────────────────────────────
+    function resetTimer() {
+      clearInterval(timerInterval);
+      timeLeft = 5;
+      timerEl.textContent = timeLeft;
+      timerEl.classList.remove('urgent');
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        timerEl.textContent = timeLeft;
+        if (timeLeft <= 3) timerEl.classList.add('urgent');
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          if (!gameOver) autoPlay();
+        }
+      }, 1000);
+    }
+
+    // When timer runs out: random empty cell for current player
+    function autoPlay() {
+      const empty = board.reduce((a, v, i) => v === '' ? [...a, i] : a, []);
+      if (empty.length) play(empty[Math.floor(Math.random() * empty.length)], true);
+    }
+
+    // ── POWER-UP BUTTONS ───────────────────────────────────
+    function refreshPowerBtns() {
+      ['X','O'].forEach(p => {
+        ['bomb','steal','freeze','shield'].forEach(pw => {
+          const btn = document.getElementById(`${p.toLowerCase()}-${pw}`);
+          btn.disabled = !powers[p][pw];
+          btn.classList.remove('active-power');
+        });
+      });
+      if (activePower) {
+        const btn = document.getElementById(`${activePower.player.toLowerCase()}-${activePower.power}`);
+        if (btn) btn.classList.add('active-power');
+      }
+    }
+
+    document.querySelectorAll('.pwr-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const player = btn.dataset.player;
+        const power  = btn.dataset.power;
+        if (gameOver) return;
+        if (player !== current) return; // not your turn
+        if (!powers[player][power]) return;
+
+        // toggle off if already active
+        if (activePower && activePower.player === player && activePower.power === power) {
+          activePower = null;
+          refreshPowerBtns();
+          statusEl.textContent = `${current}'s turn`;
+          return;
+        }
+
+        if (power === 'shield') {
+          // Shield: pick one of your own cells to protect
+          activePower = { player, power };
+          refreshPowerBtns();
+          statusEl.textContent = `🛡️ Pick YOUR piece to shield!`;
+        } else {
+          activePower = { player, power };
+          refreshPowerBtns();
+          const msg = { bomb: '💣 Pick OPPONENT piece to destroy!', steal: '🔄 Pick OPPONENT piece to steal!', freeze: '❄️ Click any cell to freeze opponent!' };
+          statusEl.textContent = msg[power];
+        }
+      });
+    });
+
+    // ── WIN / DRAW CHECK ───────────────────────────────────
+    function checkWin(b, p) {
+      return WINS.find(line => line.every(i => b[i] === p)) || null;
+    }
+
+    function checkDraw(b) { return b.every(v => v !== ''); }
+
+    function highlight(line) { line.forEach(i => cells[i].classList.add('win')); }
+
+    function updateScore() {
+      document.getElementById('score-x').textContent = scores.X;
+      document.getElementById('score-o').textContent = scores.O;
+      document.getElementById('score-d').textContent = scores.D;
+    }
+
+    // ── MINIMAX (for CPU) ──────────────────────────────────
+    function lineScore(b, line, player) {
+      const opp = player === 'O' ? 'X' : 'O';
+      const mine   = line.filter(i => b[i] === player).length;
+      const theirs = line.filter(i => b[i] === opp).length;
+      if (theirs > 0) return 0;
+      return [0, 1, 10, 100, 1000][mine];
+    }
+
+    function evaluate(b) {
+      let score = 0;
+      for (const line of WINS) {
+        score += lineScore(b, line, 'O');
+        score -= lineScore(b, line, 'X');
+      }
+      return score;
+    }
+
+    function minimax(b, depth, isMax, alpha, beta) {
+      if (checkWin(b, 'O')) return 10000;
+      if (checkWin(b, 'X')) return -10000;
+      if (checkDraw(b) || depth === 0) return evaluate(b);
+      let best = isMax ? -Infinity : Infinity;
+      for (let i = 0; i < 16; i++) {
+        if (b[i]) continue;
+        b[i] = isMax ? 'O' : 'X';
+        const s = minimax(b, depth - 1, !isMax, alpha, beta);
+        b[i] = '';
+        if (isMax) { best = Math.max(best, s); alpha = Math.max(alpha, best); }
+        else        { best = Math.min(best, s); beta  = Math.min(beta,  best); }
+        if (beta <= alpha) break;
+      }
+      return best;
+    }
+
+    function cpuMove() {
+      // instant win or block
+      for (const player of ['O', 'X']) {
+        for (let i = 0; i < 16; i++) {
+          if (board[i]) continue;
+          board[i] = player;
+          if (checkWin(board, player)) { board[i] = ''; if (player === 'O') return i; break; }
+          board[i] = '';
+        }
+      }
+      let best = -Infinity, move = -1;
+      for (let i = 0; i < 16; i++) {
+        if (board[i]) continue;
+        board[i] = 'O';
+        const s = minimax(board, 3, false, -Infinity, Infinity);
+        board[i] = '';
+        if (s > best) { best = s; move = i; }
+      }
+      return move;
+    }
+
+    // ── APPLY POWER ON CELL CLICK ──────────────────────────
+    function applyPower(i) {
+      const { player, power } = activePower;
+      const opp = player === 'X' ? 'O' : 'X';
+
+      if (power === 'bomb') {
+        if (board[i] !== opp) { statusEl.textContent = `💣 Pick an OPPONENT piece!`; return; }
+        if (shielded[i]) { statusEl.textContent = `🛡️ That piece is shielded!`; return; }
+        board[i] = '';
+        cells[i].textContent = '';
+        cells[i].className = 'cell';
+        powers[player].bomb = false;
+        activePower = null;
+        // Don't end turn — player still places normally
+        refreshPowerBtns();
+        statusEl.textContent = `💣 Bombed! Now place your ${player}`;
+        return;
+      }
+
+      if (power === 'steal') {
+        if (board[i] !== opp) { statusEl.textContent = `🔄 Pick an OPPONENT piece!`; return; }
+        if (shielded[i]) { statusEl.textContent = `🛡️ That piece is shielded!`; return; }
+        board[i] = player;
+        cells[i].textContent = player;
+        cells[i].className = `cell ${player.toLowerCase()} taken`;
+        if (shielded[i]) delete shielded[i];
+        powers[player].steal = false;
+        activePower = null;
+        refreshPowerBtns();
+        // Check win after steal
+        const winLine = checkWin(board, player);
+        if (winLine) { endGame(player, winLine); return; }
+        switchTurn();
+        return;
+      }
+
+      if (power === 'freeze') {
+        frozen[opp] = true;
+        powers[player].freeze = false;
+        activePower = null;
+        cells[i].classList.add('frozen');
+        setTimeout(() => cells[i].classList.remove('frozen'), 1200);
+        refreshPowerBtns();
+        switchTurn();
+        return;
+      }
+
+      if (power === 'shield') {
+        if (board[i] !== player) { statusEl.textContent = `🛡️ Pick YOUR OWN piece to shield!`; return; }
+        shielded[i] = true;
+        cells[i].classList.add('shielded');
+        powers[player].shield = false;
+        activePower = null;
+        refreshPowerBtns();
+        statusEl.textContent = `🛡️ Shielded! Now place your ${player}`;
+        return;
+      }
+    }
+
+    // ── MAIN PLAY ──────────────────────────────────────────
+    function play(i, forced = false) {
+      if (gameOver) return;
+
+      // Power-up mode
+      if (activePower && !forced) {
+        applyPower(i);
+        return;
+      }
+
+      if (board[i]) return;
+
+      board[i] = current;
+      cells[i].textContent = current;
+      cells[i].classList.add(current.toLowerCase(), 'taken');
+
+      const winLine = checkWin(board, current);
+      if (winLine) { endGame(current, winLine); return; }
+      if (checkDraw(board)) {
+        gameOver = true;
+        clearInterval(timerInterval);
+        statusEl.textContent = "It's a draw!";
+        scores.D++;
+        updateScore();
+        return;
+      }
+      switchTurn();
+    }
+
+    function endGame(winner, line) {
+      gameOver = true;
+      clearInterval(timerInterval);
+      highlight(line);
+      statusEl.textContent = `${winner} wins! 🎉`;
+      scores[winner]++;
+      updateScore();
+    }
+
+    function switchTurn() {
+      current = current === 'X' ? 'O' : 'X';
+
+      if (frozen[current]) {
+        frozen[current] = false;
+        statusEl.textContent = `❄️ ${current} is FROZEN — skipping turn!`;
+        setTimeout(() => {
+          if (!gameOver) {
+            switchTurn();
+          }
+        }, 1200);
+        return;
+      }
+
+      statusEl.textContent = `${current}'s turn`;
+      resetTimer();
+
+      if (vsAI && current === 'O' && !gameOver) {
+        setTimeout(() => {
+          if (!gameOver) {
+            const move = cpuMove();
+            if (move !== -1) play(move);
+          }
+        }, 400);
+      }
+    }
+
+    // ── CELL CLICK ─────────────────────────────────────────
+    cells.forEach(c => c.addEventListener('click', () => {
+      if (vsAI && current === 'O' && !activePower) return;
+      play(parseInt(c.dataset.i));
+    }));
+
+    document.getElementById('restart').addEventListener('click', init);
+
+    document.getElementById('btn-pvp').addEventListener('click', () => {
+      vsAI = false;
+      document.getElementById('btn-pvp').classList.add('active');
+      document.getElementById('btn-ai').classList.remove('active');
+      init();
+    });
+
+    document.getElementById('btn-ai').addEventListener('click', () => {
+      vsAI = true;
+      document.getElementById('btn-ai').classList.add('active');
+      document.getElementById('btn-pvp').classList.remove('active');
+      init();
+    });
+
+    vsAI = false;
+    init();
+  </script>
+</body>
+</html>
