@@ -31,9 +31,13 @@ def fetch_image_urls(query: str, limit: int) -> list:
     resp.raise_for_status()
     html = resp.text
 
+    # Only trust Bing's own per-result "murl" (original image URL) field. A generic
+    # "any image URL on the page" fallback would silently return unrelated images
+    # (ads, logos, trending-search thumbnails) whenever Bing serves a degraded or
+    # bot-challenge response instead of real results for the query — which is common
+    # from shared/automated IP ranges like a cloud host's, even if it never happens
+    # from a home connection.
     urls = re.findall(r"murl&quot;:&quot;(https?://[^&]+)&quot;", html)
-    if not urls:
-        urls = re.findall(r'https?://[^\s"\'<>]+?\.(?:jpg|jpeg|png|webp)', html, re.IGNORECASE)
 
     seen = set()
     unique_urls = []
