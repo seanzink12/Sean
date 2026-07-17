@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
 from PIL import Image, ImageDraw
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 # Tried in order; if the primary model's free-tier quota is exhausted (429),
 # we fall back to the lighter model, which has its own separate quota pool.
@@ -82,7 +82,12 @@ advertisement using these design/psychology principles:
 
 {build_rubric_text()}
 
-First, determine which of the 6 principles actually apply to this image — e.g.
+If the image is not a designed layout at all — e.g. a plain photo, a selfie,
+a screenshot of code or plain text, or anything with no intentional visual
+design to critique — return an empty "results" list rather than forcing any
+of the principles onto it.
+
+Otherwise, first determine which of the 6 principles actually apply — e.g.
 Jakob's Law (navigation/CTA conventions) doesn't apply if the image has no
 navigation or interactive elements at all. Skip irrelevant principles
 entirely; do not include them in your results.
@@ -144,7 +149,24 @@ fact (e.g. "Dark text on a white background keeps all copy legible.")."""
             # other model is usually unaffected, so try it too.
             if i == len(CRITIQUE_MODELS) - 1:
                 raise
+        except ValidationError:
+            # Model returned JSON that doesn't match our schema — rare, but
+            # happens occasionally with any structured-output call. Retry on
+            # the other model rather than crashing.
+            if i == len(CRITIQUE_MODELS) - 1:
+                raise
     raise AssertionError("unreachable")
+
+
+def prepare_image(image: Image.Image, max_dim: int = 1600) -> Image.Image:
+    # Caps both the API payload (slow/unreliable on large phone screenshots)
+    # and the fullscreen dialog size — 1600px is already sharper than any
+    # screen will render it at.
+    if max(image.size) <= max_dim:
+        return image
+    resized = image.copy()
+    resized.thumbnail((max_dim, max_dim), Image.LANCZOS)
+    return resized
 
 
 def has_usable_region(r: PrincipleResult) -> bool:
@@ -351,7 +373,7 @@ components.html(
 )
 
 if uploaded:
-    image = Image.open(uploaded).convert("RGB")
+    image = prepare_image(Image.open(uploaded).convert("RGB"))
 
     if st.session_state.get("uploaded_file_id") != uploaded.file_id:
         st.session_state.uploaded_file_id = uploaded.file_id
@@ -377,6 +399,11 @@ if uploaded:
                     )
                 else:
                     st.error(f"Gemini API error: {e}")
+            except ValidationError:
+                st.error(
+                    "Got an unexpected response from Gemini — this happens "
+                    "occasionally. Click Analyze Design again."
+                )
 
     # Hidden (not removed) because the click-forwarding script below needs a
     # real Streamlit button to trigger — Streamlit exposes no click hook on
@@ -390,8 +417,8 @@ if "result" in st.session_state:
     analyzed = st.session_state.get("analyzed_image")
     st.subheader("Findings", anchor=False)
     if analyzed is not None:
-        # Same full-resolution image the fullscreen dialog shows, just
-        # displayed small — the browser does the downscaling.
+        # Same (prepared) image the fullscreen dialog shows, just displayed
+        # small — the browser does the downscaling.
         with st.container(key="findings_thumb"):
             st.image(analyzed, width=260)
         # Hidden click target for the thumbnail (same forwarding pattern as
@@ -399,6 +426,14 @@ if "result" in st.session_state:
         with st.container(key="hidden_view_original"):
             if st.button("View Original"):
                 show_image_dialog_large(analyzed)
+
+    if not result.results:
+        st.info(
+            "This doesn't look like a homepage, poster, or ad — try "
+            "uploading a screenshot with an actual design/layout to critique."
+        )
+        st.stop()
+
     violations = [r for r in result.results if r.violated]
     passes = [r for r in result.results if not r.violated]
 
