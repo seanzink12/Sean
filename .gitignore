@@ -4,3 +4,4 @@ __pycache__/
 scraped_images/
 .claude/scheduled_tasks.lock
 .streamlit/secrets.toml
+design-critic/.streamlit/secrets.toml

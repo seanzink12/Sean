@@ -6,6 +6,12 @@
       "runtimeExecutable": "streamlit",
       "runtimeArgs": ["run", "app.py"],
       "port": 8501
+    },
+    {
+      "name": "design-critic",
+      "runtimeExecutable": "design-critic/.venv/Scripts/streamlit.exe",
+      "runtimeArgs": ["run", "design-critic/app.py", "--server.port", "8502", "--server.headless", "true"],
+      "port": 8502
     }
   ]
 }
